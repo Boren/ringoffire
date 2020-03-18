@@ -43,9 +43,9 @@ export type SocketPayloadSync = {
 
 export type SocketPayloadCreateRoom = {
   username: string;
-};
+}
 
 export type SocketPayloadJoinRoom = {
   username: string;
   roomname: string;
-};
+}

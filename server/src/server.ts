@@ -1,13 +1,15 @@
 import * as express from 'express';
 import * as http from 'http';
+import * as cors from 'cors';
 import * as socketIo from 'socket.io';
 import * as crypto from 'crypto';
 import * as winston from 'winston';
 
-import { SocketInEvent, SocketOutEvent, GameState, Errors, CardSuit, CardValue } from './constants';
-import { Card, Deck, Room } from './types';
+import { SocketInEvent, SocketOutEvent, GameState, Errors, CardSuit, CardValue, RuleText } from './constants';
+import { Card, Deck, Room, SocketPayloadSync, RoomDTO } from './types';
 
 const app = express();
+app.use(cors());
 const server = http.createServer(app);
 const io = socketIo(server);
 
@@ -22,6 +24,21 @@ const shuffle = (a: Array<any>): Array<any> => {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+};
+
+const getRoomDTO = (room: Room): RoomDTO => {
+  return {
+    gameState: room.gameState,
+    name: room.name,
+    rules: room.rules,
+    owner: room.owner,
+    players: Array.from(room.users).map(([key, value]) => {
+      return { username: value.username, id: value.id };
+    }),
+    currentCard: room.currentCard,
+    currentText: room.currentText,
+    currentPlayer: room.currentPlayer,
+  };
 };
 
 const rooms: Map<string, Room> = new Map();
@@ -54,11 +71,21 @@ const getNextPlayer = (room: Room): string => {
 };
 
 const syncroom = (roomname: string): void => {
-  io.in(roomname).emit(SocketOutEvent.SYNC, { room: rooms.get(roomname) });
+  io.in(roomname).emit(SocketOutEvent.SYNC, { room: getRoomDTO(rooms.get(roomname)) } as SocketPayloadSync);
+};
+
+// TODO
+const deleteroom = (roomname: string): void => {
+  return;
+};
+
+// TODO
+const leaveroom = (roomname: string, id: string): void => {
+  return;
 };
 
 io.sockets.on('connection', socket => {
-  logger.info('User socket connected');
+  logger.info(`User socket connected. ID: ${socket.id}`);
 
   socket.on(SocketInEvent.CREATE_ROOM, e => {
     logger.info(`Event: ${SocketInEvent.CREATE_ROOM}. Data: ${JSON.stringify(e)}`);
@@ -82,10 +109,6 @@ io.sockets.on('connection', socket => {
       .toString('hex')
       .toUpperCase();
 
-    socket.emit(SocketOutEvent.ROOM_CREATED, {
-      roomName: roomname,
-    });
-
     const intervalId = setInterval(() => {
       syncroom(roomname);
     }, 5 * 1000);
@@ -99,11 +122,17 @@ io.sockets.on('connection', socket => {
         rules: [],
         currentPlayer: undefined,
         currentPlayerIterator: undefined,
+        currentCard: undefined,
+        currentText: '',
         owner: socket.id,
         intervalId: intervalId,
       });
 
       userRooms.set(socket.id, roomname);
+
+      socket.emit(SocketOutEvent.ROOM_CREATED, {
+        room: getRoomDTO(rooms.get(roomname)),
+      });
 
       logger.info(`Room ${roomname}: Created `);
     });
@@ -126,7 +155,7 @@ io.sockets.on('connection', socket => {
       return;
     }
 
-    const roomname = e.roomname as string;
+    const roomname = (e.roomname as string).trim();
 
     if (rooms.has(roomname)) {
       const room = rooms.get(roomname);
@@ -136,8 +165,12 @@ io.sockets.on('connection', socket => {
         socket.join(roomname, () => {
           rooms.get(roomname).users.set(socket.id, { username: username, id: socket.id });
           userRooms.set(socket.id, roomname);
-          //socket.emit(SocketOutEvent.ROOM_JOIN_SUCCESS, { room: rooms.get(roomname) });
-          io.in(roomname).emit(SocketOutEvent.PLAYER_JOINED, { username: username, id: socket.id });
+          socket.emit(SocketOutEvent.ROOM_JOIN_SUCCESS, { room: getRoomDTO(rooms.get(roomname)) });
+          io.in(roomname).emit(SocketOutEvent.PLAYER_JOINED, {
+            username: username,
+            id: socket.id,
+            room: getRoomDTO(rooms.get(roomname)),
+          });
         });
       } else {
         socket.emit(SocketOutEvent.ERROR, { error: Errors.WRONG_GAME_STATE, info: { gameState: room.gameState } });
@@ -180,130 +213,15 @@ io.sockets.on('connection', socket => {
       `Room ${room.name}: Player ${JSON.stringify(room.users.get(room.currentPlayer))} drew ${JSON.stringify(card)}`,
     );
 
-    switch (card.value) {
-      case CardValue.ACE:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            'Waterfall: the player with the card starts drinking and it goes round the circle, when it gets back to the player they can then stop drinking and then it follows round',
-        });
-        break;
-
-      case CardValue.TWO:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'You: Pick someone to drink',
-        });
-        break;
-
-      case CardValue.THREE:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Me: Drink yourself',
-        });
-        break;
-
-      case CardValue.FOUR:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Whores: All girls drink',
-        });
-        break;
-
-      case CardValue.FIVE:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            'Thumb master: The person with the card may place their thumb on the table at any time during the game and the last person to do so has to drink',
-        });
-        break;
-
-      case CardValue.SIX:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Dicks: all guys drink',
-        });
-        break;
-
-      case CardValue.SEVEN:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            'Heaven: The person with the card may raise their hand at any time during the game and the last person to do so has to drink',
-        });
-        break;
-
-      case CardValue.EIGHT:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Mate: pick a mate who has to drink with you',
-        });
-        break;
-
-      case CardValue.NINE:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            "Rhyme: Say a word and go round the circle rhyming with that word, whoever hesitates or can't think of a rhyming word has to drink, words with no rhyme such as orange are banned",
-        });
-        break;
-
-      case CardValue.TEN:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            "Categories: say a word from that category and go round the circle, whoever hesitates or can't think of a word associated with that category has to drink",
-        });
-        break;
-
-      case CardValue.JACK:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Rule: Make a new rule for the game',
-        });
-        break;
-
-      case CardValue.QUEEN:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text:
-            'Question master: if you ask a player a question and they answer they have to drink, if they answer the question with "Fuck you question master" then you have to drink',
-        });
-        break;
-
-      case CardValue.KING:
-        room.currentPlayer = getNextPlayer(room);
-        io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
-          card: card,
-          currentPlayer: room.currentPlayer,
-          text: 'Whores: All girls drink',
-        });
-        break;
-    }
+    room.currentPlayer = getNextPlayer(room);
+    room.currentCard = card;
+    room.currentText = RuleText[card.value];
+    io.in(room.name).emit(SocketOutEvent.CARD_DRAWN, {
+      card: card,
+      currentPlayer: room.currentPlayer,
+      text: RuleText[card.value],
+      room: getRoomDTO(room),
+    });
   });
 
   // TODO
@@ -326,23 +244,49 @@ io.sockets.on('connection', socket => {
       logger.info(`Room ${room.name}: Starting game`);
       room.gameState = GameState.IN_PROGRESS;
       room.currentPlayer = getNextPlayer(room);
-      io.in(room.name).emit(SocketOutEvent.GAME_STARTED, { currentPlayer: room.currentPlayer });
+      io.in(room.name).emit(SocketOutEvent.GAME_STARTED, {
+        currentPlayer: room.currentPlayer,
+        room: getRoomDTO(room),
+      });
     } else {
       socket.emit(SocketOutEvent.ERROR, { error: Errors.NOT_CREATOR, info: '' });
     }
   });
 
-  // TODO
   socket.on(SocketInEvent.LEAVE_ROOM, e => {
     logger.info(`Event: ${SocketInEvent.LEAVE_ROOM}`);
     logger.info(e);
 
-    io.emit('Creating room');
+    if (userRooms.has(socket.id)) {
+      const room = rooms.get(userRooms.get(socket.id));
+
+      if (room.owner === socket.id) {
+        logger.info(`Room ${room.name}: Deleting because owner disconnected`);
+        deleteroom(room.name);
+      } else {
+        logger.info(`Room ${room.name}: User ${socket.id} disconnected. Leaving room`);
+        leaveroom(room.name, socket.id);
+      }
+    }
+  });
+
+  socket.on('disconnect', () => {
+    logger.info(`User socket disconnected. ID: ${socket.id}`);
+
+    if (userRooms.has(socket.id)) {
+      const room = rooms.get(userRooms.get(socket.id));
+
+      if (room.owner === socket.id) {
+        logger.info(`Room ${room.name}: Deleting because owner disconnected`);
+        deleteroom(room.name);
+      } else {
+        logger.info(`Room ${room.name}: User ${socket.id} disconnected. Leaving room`);
+        leaveroom(room.name, socket.id);
+      }
+    }
   });
 });
 
-// TODO: Handle disconnect
-
-server.listen(process.env.PORT || 3000, function() {
-  logger.info(`Listening on port ${process.env.PORT || 3000}`);
+server.listen(process.env.PORT || 4000, function() {
+  logger.info(`Listening on port ${process.env.PORT || 4000}`);
 });
