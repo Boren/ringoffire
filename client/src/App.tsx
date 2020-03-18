@@ -13,7 +13,7 @@ import { Cards } from './Cards';
 import { Rules } from './Rules';
 
 const App = () => {
-  const ENDPOINT = 'http://127.0.0.1:4000';
+  const ENDPOINT = 'https://rof-api.bore.ai';
 
   const [gameState, setGameState] = useState<RoomDTO>();
   const [socket, setSocket] = useState<SocketIOClient.Socket>();
