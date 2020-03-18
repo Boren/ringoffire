@@ -7,7 +7,7 @@ spec:
     app: rof-server
   ports:
     - port: 80
-      targetPort: 3000
+      targetPort: 4000
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -50,4 +50,4 @@ spec:
           image: hovedbore/rof-server:server-latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 3000
+            - containerPort: 4000
