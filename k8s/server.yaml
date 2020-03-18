@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rof-server
+spec:
+  selector:
+    app: rof-server
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: rof-server-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - rof-api.bore.ai
+      secretName: rof-server-prod-cert
+  rules:
+    - host: rof-api.bore.ai
+      http:
+        paths:
+          - backend:
+              serviceName: rof-server
+              servicePort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rof-server-deployment
+  labels:
+    app: rof-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rof-server
+  template:
+    metadata:
+      labels:
+        app: rof-server
+    spec:
+      containers:
+        - name: rof-server
+          image: hovedbore/rof-server:server-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000

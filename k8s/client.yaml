@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rof-client
+spec:
+  selector:
+    app: rof-client
+  ports:
+    - port: 80
+      targetPort: 5000
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: rof-client-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+spec:
+  tls:
+    - hosts:
+        - rof.bore.ai
+      secretName: rof-client-prod-cert
+  rules:
+    - host: rof.bore.ai
+      http:
+        paths:
+          - backend:
+              serviceName: rof-client
+              servicePort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rof-client-deployment
+  labels:
+    app: rof-client
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: rof-client
+  template:
+    metadata:
+      labels:
+        app: rof-client
+    spec:
+      containers:
+        - name: rof-client
+          image: hovedbore/rof-server:client-latest
+          imagePullPolicy: Always
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            periodSeconds: 30
+            timeoutSeconds: 1
+            initialDelaySeconds: 10
+          ports:
+            - containerPort: 5000
