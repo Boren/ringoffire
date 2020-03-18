@@ -54,6 +54,9 @@ const App = () => {
       setGameState(data.room);
     });
 
+    client.on(SocketOutEvent.GAME_STARTED, (data: SocketPayloadSync): void => {
+      setGameState(data.room);
+    });
 
     setSocket(client);
   }, []);
@@ -164,10 +167,15 @@ const App = () => {
 
   return (
     <div className='App'>
-      <div className='flex flex-row items-stretch'>
-        <h1 className='flex-1 px-4 py-2 m-2 text-center'>
-          {gameState.name} - {gameState.gameState}
-          {gameState.owner === socket.id && gameState.gameState === GameState.WAITING_FOR_PLAYERS ? (
+      <div className='flex flex-col items-stretch'>
+        <span className='flex-1 px-4 pt-2 mt-2 text-center text-4xl font-extrabold text-blue-600'>
+          {gameState.name}
+        </span>
+        <span className='flex-1 px-4 pb-2 mb-2 text-center text-xl text-italic'>
+          {gameState.gameState}
+        </span>
+        {gameState.owner === socket.id && gameState.gameState === GameState.WAITING_FOR_PLAYERS ? (
+          <div className="flex-1 px-4 py-2 m-2 text-center">
             <button
               className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline'
               type='button'
@@ -175,10 +183,10 @@ const App = () => {
             >
               Start
             </button>
+            </div>
           ) : (
             ''
           )}
-        </h1>
       </div>
       <div className='flex flex-row items-stretch'>
         <div className='flex-1 text-center  px-4 py-2 m-2'>

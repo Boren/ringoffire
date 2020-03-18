@@ -8,5 +8,5 @@ type PlayerProps = {
 export const Player: React.FC<PlayerProps> = (props) => {
     const { name, currentTurn } = props;
 
-    return <span className={currentTurn ? "font-extrabold text-red-600" : ""}>{name}</span>;
+    return <span className={currentTurn ? "text-5xl font-extrabold text-red-600" : "text-4xl"}>{name}</span>;
 };

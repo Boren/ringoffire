@@ -12,15 +12,20 @@ export const Players: React.FC<PlayersProps> = props => {
   const { gameState } = props;
 
   return (
-    <ul>
-      {gameState.players.map(player => (
-        <li key={player.id}>
-          <Player
-            name={player.username}
-            currentTurn={gameState.currentPlayer === player.id}
-          />
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className={'text-6xl font-extrabold text-blue-600 mb-12'}>
+        Players
+      </div>
+      <ul>
+        {gameState.players.map(player => (
+          <li key={player.id}>
+            <Player
+              name={player.username}
+              currentTurn={gameState.currentPlayer === player.id}
+            />
+          </li>
+        ))}
+      </ul>
+    </>
   );
 };
